@@ -7,8 +7,11 @@ import matplotlib.pyplot as plt
 # In particular, we plot the expectation value of \sigma_x and \sigma_z measured on the first spin (wlog).
 
 exact = json.load(open('data/exact_result_J0.25_B1.dat'))
-# data = json.load(open('data/pVQD_J0.25_B1_8000shots.dat'))
-data = json.load(open('data/trial_results_state_vec_backend.json'))
+data = json.load(open('data/pVQD_J0.25_B1_8000shots.dat'))
+# data = json.load(open('data/pVQD_J0.25_B1_statevector.dat'))
+
+# data = json.load(open('data/tfim_nspins=3_j=0.25_h=1.0_statevec.json'))
+# data = json.load(open('data/tfim_nspins=3_j=0.25_h=1.0_shots=800.json'))
 
 # Instantiate the plot
 fig, ax = plt.subplots(2,1,sharex=True)
