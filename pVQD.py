@@ -1,6 +1,6 @@
 # Import the relevant libraries
 from qiskit.opflow import I, Z
-from model import tens_prod
+from model import tens_prod, one_site_op
 import numpy as np
 from qiskit.opflow import CircuitSampler, StateFn
 from qiskit.circuit import ParameterVector
@@ -22,12 +22,10 @@ def projector_zero_global(num_qubits):
 def projector_zero_local(num_qubits):
 
 	tot_prj = 0  # initialize the sum of all local projectors
-	loc_prj_list = [I] * num_qubits  # initialize the local projector list
+	loc_op = [I] * num_qubits  # initialize the local projector list
 
 	for k in range(num_qubits):
-		loc_prj_list[k] = 0.5*(I+Z)
-		tot_prj += tens_prod(loc_prj_list)
-		loc_prj_list[k] = I  # restore loc_prj_list to its initial form for the next iteration
+		tot_prj += one_site_op(loc_op, k, 0.5*(I+Z))
 
 	return tot_prj / num_qubits  # returns a PauliSumOp object
 
@@ -99,8 +97,9 @@ class pVQD:
 
 		# Construct the circuit shown in Fig. 1 of the main Ref
 		op_prj = StateFn(projector_zero(self.num_qubits), is_measurement=True) # get the projector (OperatorStateFn)
-		# Implement C^\dagger(w+dw) e^{-i H \delta_t} C(w); Note C^\dagger = C^{-1}; returns a CircuitStateFn
+		# Implement the sequence C^\dagger(w+dw) e^{-i H \delta_t} C(w); C^\dagger = C^{-1}; returns a CircuitStateFn
 		seq_gates = StateFn(r_circ + U_dt + l_circ.inverse())  # "+" deprecated; use "compose" instead
+		# Projecting on zero means we measure how many times all the qubits are 0's after applying seq_gates
 		state_wfn = op_prj @ seq_gates # circuit state (ComposedOp)
 
 		return state_wfn
@@ -264,11 +263,11 @@ class pVQD:
 
 	# Run the pVQD algorithm
 	def run(self, overlap_threshold, time_step, n_steps, obs_dict = {}, filename = 'data/output_algo.json',
-		    max_iter = 100, opt = 'sgd', cost_fun = 'global', grad = 'param_shift'):
+		    max_iter = 100, opt = 'sgd', cost_fun = 'global', grad = 'param_shift', input_dictio = {}):
 		"""
 		Args:
 			overlap_threshold (float): when the value is attained, the optimization of dw is deemed completed
-			time_step (integer): small time step for the time evolution
+			time_step (float): small time step for the time evolution
 			n_steps (integer): number of small time steps
 			obs_dict (dictionary): observables to measure (of the form "name of op: PauliOp", where name of op is a str)
 			filename (string): name of the file to output the results
@@ -276,6 +275,7 @@ class pVQD:
 			opt (string): optimizer (in principle 'sgd', 'adam', 'momentum', etc., but only 'sgd' is implemented here)
 			cost_fun (string): cost function is either 'global' or 'local' to select the appropriate projector
 			grad (string): method to compute the gradient ('param_shift' or 'spsa')
+			input_dictio (dictionary): input of all the parameters chosen by the user (to be stored in the output file)
 		Returns:
 			file with all the data
 		"""
@@ -309,6 +309,7 @@ class pVQD:
 		         'fin_err_fid': [],  # final error on the fidelity/overlap after optimizing dw (fixed time step)
 		              'params': [list(self.parameters)]  # updated variational parameters (fixed time step)
 					}
+		data_log = {**input_dictio,**data_log}  # merge the input dictio with the data log
 
 		# If the dictionary of observables is not empty, do the following:
 		if len(obs_dict) > 0:
@@ -333,7 +334,8 @@ class pVQD:
 			count = 0  # count the number of iterations to optimize the small shift dw at a fixed time
 			overlap = [0.01,0]  # initialize the overlap value and its error at a fixed time
 
-			# Iterate over the optimization steps of the small variational shift parameters dw for a fixed time
+			# Iterate over the optimization steps of the small variational shift parameters dw for a fixed time;
+			# Do so up until the overlap reaches more or less 1 (or the maximum number of iterations is reached)
 			while overlap[0] < overlap_threshold and count < max_iter:
 
 				print("Shift optimizing step:", count + 1)
